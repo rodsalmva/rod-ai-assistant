@@ -107,8 +107,8 @@ if prompt := st.chat_input("Ask me anything about Rod..."):
                 response = client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
                     messages=api_messages,
-                    temperature=0.3, 
-                    max_tokens=1024
+                    temperature=0.5, 
+                    max_tokens=512
                 )
                 reply = response.choices[0].message.content
                 
