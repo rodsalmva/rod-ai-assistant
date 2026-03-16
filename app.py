@@ -28,8 +28,9 @@ client = Groq(api_key=GROQ_API_KEY)
 def send_chat_to_email():
     try:
         sender_email = st.secrets["EMAIL_ADDRESS"]
-        sender_password = st.secrets["EMAIL_PASSWORD"]
-        receiver_email = "varodsalm@gmail.com"  # Your main email
+        # FIXED: Now strictly matches your secrets.toml variable name
+        sender_password = st.secrets["GMAIL_APP_PASSWORD"] 
+        receiver_email = "varodsalm@gmail.com"  # The email where you want to RECEIVE the chat logs
         
         # Format the chat history into a readable text format
         chat_log = "Here is a recent chat transcript with your AI Portfolio Bot:\n\n"
@@ -50,7 +51,7 @@ def send_chat_to_email():
             
         return True
     except Exception as e:
-        st.error(f"Failed to send email: {e}")
+        st.error(f"Failed to send email. Check your Streamlit Secrets settings. Error: {e}")
         return False
 
 # ================= LOAD KNOWLEDGE BASE =================
@@ -95,24 +96,37 @@ if prompt := st.chat_input("Ask me anything about Rod..."):
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    api_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    api_messages =[{"role": "system", "content": SYSTEM_PROMPT}]
     for m in st.session_state.messages:
         api_messages.append({"role": m["role"], "content": m["content"]})
 
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             try:
+                # FIRST TRY: The big, smart 70B model
                 response = client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
                     messages=api_messages,
-                    temperature=0.3, # Lowered temperature to 0.3 to prevent hallucinations
+                    temperature=0.3, 
                     max_tokens=1024
                 )
-                
                 reply = response.choices[0].message.content
-                st.markdown(reply)
-                
-                st.session_state.messages.append({"role": "assistant", "content": reply})
                 
             except Exception as e:
-                st.error(f"Error connecting to AI: {e}")
+                # FALLBACK: If the 70B model hits a rate limit (429), switch to the 8B model automatically
+                if "429" in str(e) or "rate_limit" in str(e):
+                    try:
+                        response = client.chat.completions.create(
+                            model="llama-3.1-8b-instant",
+                            messages=api_messages,
+                            temperature=0.3,
+                            max_tokens=1024
+                        )
+                        reply = response.choices[0].message.content
+                    except Exception as fallback_e:
+                        reply = "I apologize, but I am currently receiving too many requests. Please contact Rod directly at varodsalm@gmail.com!"
+                else:
+                    reply = "I apologize, but my servers are currently undergoing maintenance. Please email Rod directly!"
+
+            st.markdown(reply)
+            st.session_state.messages.append({"role": "assistant", "content": reply})
